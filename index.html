@@ -1,0 +1,455 @@
+const TWELVE_DATA_API_KEY = 'YOUR_TWELVE_DATA_API_KEY'; // Get free API key from twelvedata.com
+const stocks = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA'];
+let mainChart;
+let stockCharts = {};
+let lastPrices = {};
+let animationInterval;
+
+// Function to get real-time price updates
+async function getRealtimePrice(symbol) {
+    try {
+        const response = await fetch(https://api.twelvedata.com/price?symbol=${symbol}&apikey=${TWELVE_DATA_API_KEY});
+        const data = await response.json();
+        if (data.price) {
+            return parseFloat(data.price);
+        } else {
+            throw new Error('Invalid API response');
+        }
+    } catch (error) {
+        console.error(Error fetching price for ${symbol}:, error);
+        // Return simulated price if API fails
+        return simulatePrice(symbol);
+    }
+}
+
+// Function to simulate price for demo purposes
+function simulatePrice(symbol) {
+    if (!lastPrices[symbol]) {
+        // Initial prices for major stocks if API fails
+        const initialPrices = {
+            'AAPL': 175.50,
+            'MSFT': 325.75,
+            'GOOGL': 140.20,
+            'AMZN': 178.30,
+            'NVDA': 950.40
+        };
+        lastPrices[symbol] = initialPrices[symbol] || 100.00;
+    }
+    
+    // Simulate price movement (±0.5%)
+    const change = lastPrices[symbol] * (Math.random() * 0.01 - 0.005);
+    return lastPrices[symbol] + change;
+}
+
+// Function to create animated main chart with fast-moving line
+async function createMainChart() {
+    const symbol = 'AAPL';
+    const ctx = document.getElementById('stockChart').getContext('2d');
+    
+    // Generate initial animated data
+    const initialData = [];
+    const now = new Date();
+    let basePrice = 150;
+    const labels = [];
+    
+    // Create 50 initial points with high volatility for animation
+    for (let i = 0; i < 50; i++) {
+        const time = new Date(now.getTime() - (50 - i) * 60000);
+        labels.push(time);
+        
+        const volatility = 5;
+        const change = (Math.random() - 0.5) * volatility;
+        basePrice += change;
+        
+        initialData.push(basePrice);
+    }
+    
+    mainChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: symbol,
+                data: initialData,
+                borderColor: 'var(--primary-color)',
+                backgroundColor: 'rgba(255, 0, 102, 0.1)',
+                borderWidth: 2,
+                pointRadius: 0,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+                duration: 100 // Fast animation
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'minute'
+                    },
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    },
+                    ticks: {
+                        color: 'var(--text-secondary)'
+                    }
+                },
+                y: {
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    },
+                    ticks: {
+                        color: 'var(--text-secondary)'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: {
+                        color: 'var(--text-primary)'
+                    }
+                }
+            }
+        }
+    });
+    
+    // Start fast animation for main chart
+    startFastAnimation();
+    
+    // After 10 seconds, switch to real data if available
+    setTimeout(async () => {
+        clearInterval(animationInterval);
+        try {
+            const response = await fetch(https://api.twelvedata.com/time_series?symbol=${symbol}&interval=1min&outputsize=50&apikey=${TWELVE_DATA_API_KEY});
+            const data = await response.json();
+            
+            if (data.values) {
+                const timeSeriesData = data.values;
+                
+                const labels = timeSeriesData.map(item => new Date(item.datetime)).reverse();
+                const prices = timeSeriesData.map(item => parseFloat(item.close)).reverse();
+                
+                mainChart.data.labels = labels;
+                mainChart.data.datasets[0].data = prices;
+                mainChart.update();
+                
+                // Start slower, more realistic updates
+                startSlowerAnimation();
+            } else {
+                // Continue with simulated data if API fails
+                startSlowerAnimation();
+            }
+        } catch (error) {
+            console.error('Error fetching real data:', error);
+            // Continue with simulated data if API fails
+            startSlowerAnimation();
+        }
+    }, 10000);
+}
+
+// Function to start fast animation for opening effect
+function startFastAnimation() {
+    animationInterval = setInterval(() => {
+        const data = mainChart.data.datasets[0].data;
+        const labels = mainChart.data.labels;
+        const lastPrice = data[data.length - 1];
+        
+        // High volatility for dramatic effect
+        const volatility = 8;
+        const change = (Math.random() - 0.5) * volatility;
+        const newPrice = lastPrice + change;
+        
+        const lastDate = new Date(labels[labels.length - 1]);
+        const now = new Date(lastDate.getTime() + 60000);
+        
+        labels.push(now);
+        data.push(newPrice);
+        
+        if (data.length > 50) {
+            data.shift();
+            labels.shift();
+        }
+        
+        mainChart.update('quiet');
+    }, 200); // Update every 200ms for fast animation
+}
+
+// Function to start slower, more realistic animation
+function startSlowerAnimation() {
+    animationInterval = setInterval(() => {
+        const data = mainChart.data.datasets[0].data;
+        const labels = mainChart.data.labels;
+        const lastPrice = data[data.length - 1];
+        
+        // More realistic volatility
+        const volatility = 1;
+        const change = (Math.random() - 0.5) * volatility;
+        const newPrice = lastPrice + change;
+        
+        const lastDate = new Date(labels[labels.length - 1]);
+        const now = new Date(lastDate.getTime() + 60000);
+        
+        labels.push(now);
+        data.push(newPrice);
+        
+        if (data.length > 50) {
+            data.shift();
+            labels.shift();
+        }
+        
+        mainChart.update('quiet');
+    }, 2000); // Update every 2 seconds for more realistic animation
+}
+
+// Function to create live stock chart for individual stocks
+async function createLiveStockChart(symbol, chartId) {
+    const stockBox = document.getElementById(stock${stocks.indexOf(symbol) + 1});
+    stockBox.classList.add('loading');
+    const ctx = document.getElementById(chartId).getContext('2d');
+    
+    try {
+        // Get initial data
+        const response = await fetch(https://api.twelvedata.com/time_series?symbol=${symbol}&interval=1min&outputsize=30&apikey=${TWELVE_DATA_API_KEY});
+        const data = await response.json();
+        
+        let labels = [];
+        let prices = [];
+        
+        if (data.values) {
+            labels = data.values.map(item => new Date(item.datetime)).reverse();
+            prices = data.values.map(item => parseFloat(item.close)).reverse();
+            lastPrices[symbol] = prices[prices.length - 1];
+        } else {
+            // Generate simulated data if API fails
+            const now = new Date();
+            let basePrice = simulatePrice(symbol);
+            
+            for (let i = 0; i < 30; i++) {
+                const time = new Date(now.getTime() - (30 - i) * 60000);
+                labels.push(time);
+                
+                const volatility = 1;
+                const change = (Math.random() - 0.5) * volatility;
+                basePrice += change;
+                
+                prices.push(basePrice);
+            }
+            
+            lastPrices[symbol] = prices[prices.length - 1];
+        }
+
+        stockCharts[symbol] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: symbol,
+                    data: prices,
+                    borderColor: 'var(--primary-color)',
+                    backgroundColor: 'rgba(255, 0, 102, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: {
+                    duration: 500
+                },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'minute'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            display: false
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: 'var(--text-secondary)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+
+        // Update stock box color based on price movement
+        updateStockBoxStyle(stockBox, prices[prices.length - 1], prices[prices.length - 2]);
+        stockBox.classList.remove('loading');
+    } catch (error) {
+        console.error(Error creating chart for ${symbol}:, error);
+        stockBox.classList.remove('loading');
+        
+        // Create chart with simulated data if API fails
+        const now = new Date();
+        let basePrice = simulatePrice(symbol);
+        const labels = [];
+        const prices = [];
+        
+        for (let i = 0; i < 30; i++) {
+            const time = new Date(now.getTime() - (30 - i) * 60000);
+            labels.push(time);
+            
+            const volatility = 1;
+            const change = (Math.random() - 0.5) * volatility;
+            basePrice += change;
+            
+            prices.push(basePrice);
+        }
+        
+        lastPrices[symbol] = prices[prices.length - 1];
+        
+        stockCharts[symbol] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: symbol,
+                    data: prices,
+                    borderColor: 'var(--primary-color)',
+                    backgroundColor: 'rgba(255, 0, 102, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: {
+                    duration: 500
+                },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'minute'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            display: false
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: 'var(--text-secondary)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+        
+        updateStockBoxStyle(stockBox, prices[prices.length - 1], prices[prices.length - 2]);
+    }
+}
+
+// Function to update stock box style based on price movement
+function updateStockBoxStyle(element, currentPrice, previousPrice) {
+    element.classList.remove('up', 'down');
+    if (currentPrice > previousPrice) {
+        element.classList.add('up');
+    } else if (currentPrice < previousPrice) {
+        element.classList.add('down');
+    }
+}
+
+// Function to update charts with new data
+async function updateCharts() {
+    for (const symbol of stocks) {
+        try {
+            const stockBox = document.getElementById(stock${stocks.indexOf(symbol) + 1});
+            stockBox.classList.add('loading');
+            
+            const price = await getRealtimePrice(symbol);
+            if (price && stockCharts[symbol]) {
+                const chart = stockCharts[symbol];
+                const data = chart.data.datasets[0].data;
+                const labels = chart.data.labels;
+                const lastPrice = data[data.length - 1];
+                const now = new Date();
+
+                // Add new price point with animation
+                const steps = 10;
+                const priceDiff = price - lastPrice;
+                
+                for (let i = 1; i <= steps; i++) {
+                    setTimeout(() => {
+                        const stepPrice = lastPrice + (priceDiff * (i / steps));
+                        if (i === steps) {
+                            // On final step, add a new point
+                            labels.push(now);
+                            data.push(price);
+                            
+                            if (data.length > 30) {
+                                data.shift();
+                                labels.shift();
+                            }
+                        } else {
+                            // During animation, just update the last point
+                            data[data.length - 1] = stepPrice;
+                        }
+                        chart.update('quiet');
+                    }, i * 50);
+                }
+
+                // Update stock box style
+                updateStockBoxStyle(stockBox, price, lastPrices[symbol]);
+                lastPrices[symbol] = price;
+            }
+            
+            stockBox.classList.remove('loading');
+        } catch (error) {
+            console.error(Error updating ${symbol}:, error);
+            const stockBox = document.getElementById(stock${stocks.indexOf(symbol) + 1});
+            stockBox.classList.remove('loading');
+        }
+    }
+}
+
+// Initialize all charts
+async function initCharts() {
+    await createMainChart();
+    
+    // Create charts for each stock with a slight delay to avoid API rate limits
+    for (let i = 0; i < stocks.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay between API calls
+        await createLiveStockChart(stocks[i], candleChart${i + 1});
+    }
+    
+    // Update charts every 10 seconds
+    setInterval(updateCharts, 10000);
+}
+
+// Start the application
+document.addEventListener('DOMContentLoaded', initCharts);
